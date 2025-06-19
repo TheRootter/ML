@@ -24,41 +24,29 @@ class ImageModel(nn.Module):
     def __init__(self):
         super(ImageModel, self).__init__()
 
-        # Блок 1
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=12, kernel_size=5, padding=1)
-        self.bn1 = nn.BatchNorm2d(12)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
 
-        # Блок 2
-        self.conv2 = nn.Conv2d(in_channels=12, out_channels=24, kernel_size=5, padding=1)
-        self.bn2 = nn.BatchNorm2d(24)
-
-        # Пулинг
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Блок 3
-        self.conv3 = nn.Conv2d(in_channels=24, out_channels=48, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(48)
 
-        # Блок 4
-        self.conv4 = nn.Conv2d(in_channels=48, out_channels=64, kernel_size=3, padding=1)
-        self.bn4 = nn.BatchNorm2d(64)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
 
         # Полносвязный слой 
-        self.fc = nn.Linear(3136, 10)
+        self.fc = nn.Linear(64 * 16 * 16, 10)
 
-    def forward(self, inp):
-        out = F.relu(self.bn1(self.conv1(inp)))
+# при изменении размера ядра точность после первой эпохи упала, длительность заметно не изменилась, 
+# судя по ощущениям и звукам -- компьютеру стало легче обрабатывать
+# вторая эпоха покзала хорошую точность
+# конкретно в моем случае, проверочный батч стал менее точно определяться
+    def forward(self, out):
+        out = self.pool(F.relu(self.bn1(self.conv1(out))))
         out = F.relu(self.bn2(self.conv2(out)))
-        out = self.pool(out)
-
-        out = F.relu(self.bn3(self.conv3(out)))
-        out = F.relu(self.bn4(self.conv4(out)))
-        out = self.pool(out)
-
-        out = out.view(out.size(0), -1)  
+        out = out.view(out.size(0), -1)
         return self.fc(out)
 
-
+# для новой модели точность стала меньше, время обучения по ощущениям увеличилось
 
 model = ImageModel()
 
@@ -88,8 +76,8 @@ def test_accuracy():
     return 100 * accuracy / total
 
 
-train_loader = DataLoader(train_set, batch_size=10, shuffle=True)
-test_loader = DataLoader(test_set, batch_size=10, shuffle=False)
+train_loader = DataLoader(train_set, batch_size=20, shuffle=True)
+test_loader = DataLoader(test_set, batch_size=20, shuffle=False)
 
 
 loss = nn.CrossEntropyLoss()
@@ -128,7 +116,7 @@ classes = ['airplane', 'automobile', 'bird', 'cat', 'deer',
 images, true_labels =  next(iter(test_loader))
 
 print('True labels: ', end='') 
-for i in range(10): 
+for i in range(20): 
     print(classes[true_labels[i]], end=' ') 
 print()  
 
@@ -137,11 +125,16 @@ predict = torch.max(output, 1)[1]
 print('Predicted: ', end='')
 
 
-for i in range(10):
+for i in range(20):
     print(classes[predict[i]], end=' ') 
 print()
 
-# объединяем все 10 изображений в одно
+# Подсчёт точности
+correct = (predict == true_labels).sum().item()
+accuracy_20 = 100 * correct / 20
+print(f"\nAccuracy on 20 test images: {accuracy_20:.2f}%")
+
+# объединяем все 20 изображений в одно
 images = torchvision.utils.make_grid(images)
 
 # мы выполняли нормализацию, и значения изображений находятся в диапазоне от -1 до 1,
